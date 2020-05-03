@@ -5,14 +5,18 @@ import matplotlib.pyplot as plt
 from functools import reduce
 import operator
 import sys
+from math import sqrt
 import pprint
-from sklearn.linear_model import LinearRegression, Lasso
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import *
+from sklearn.ensemble import *
 from sklearn.metrics import *
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.naive_bayes import *
 from scipy.stats import pearsonr, spearmanr
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.neural_network import MLPRegressor
+from sklearn.svm import *
+from sklearn.gaussian_process import *
 from nice_data import get_intake_data
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
@@ -40,7 +44,8 @@ HOLIDAYS = [
     # TODO: Add more holidays
 ]
 
-for csv in sorted(os.listdir("text"), key=lambda x: [int(i) for i in x.split(".", 1)[0].split("_")])[2:]:
+csv_files = [f for f in os.listdir("text") if f.endswith("csv")]
+for csv in sorted(csv_files, key=lambda x: [int(i) for i in x.split(".", 1)[0].split("_")])[2:]:
     csv_key = [int(i) for i in csv.split(".", 1)[0].split("_")]
     csv_key[1] += 1
     names.append("%i-%i-%i" % tuple(csv_key))
@@ -99,21 +104,20 @@ for col in range(n_cols):
     except IndexError:
         pass
     try:
-        print("Using data from date:",merged.columns[col])
-        print("y value obtained from date: ", merged.iloc[:, col + lookahead].name)
-        print("Predicting for date: ", merged.iloc[end - 1].name)
+        # print("Using data from date:",merged.columns[col])
+        # print("y value obtained from date: ", merged.iloc[:, col + lookahead].name)
+        # print("Predicting for date: ", merged.iloc[end - 1].name)
         y.append(merged.iloc[end - 1, col + lookahead])
     except:
         y_incomplete.append(merged.iloc[end, -1])
 
     current_day += 1
-    print("*" * 10)
 
 X_new = X[len(y):]
 X = X[:len(y)]
 
 if len(sys.argv) == 1:
-    n_test = 6 
+    n_test = 6
 else:
     n_test = int(sys.argv[1])
 
@@ -126,9 +130,8 @@ test_start_date = dates[-(n_test + lookahead + 1)]
 X_train, y_train = X[:-n_test], y[:-n_test]
 X_test, y_test = X[-n_test:], y[-n_test:]
 
-print(X.shape, X_train.shape, X_test.shape)
-
-reg = MLPRegressor((250, 250), alpha=0.0001, max_iter=1000, solver="adam", random_state=12)
+# >>> Experiment with your own regressor here <<<
+reg = MLPRegressor((500, 500, 500), alpha=0.0001, max_iter=1000, solver="adam", random_state=12)
 reg.fit(X_train, y_train)
 
 feature_names = ["deaths_day_n-%i" % (i + 1) for i in range(0, n_days)] +\
@@ -149,36 +152,37 @@ print(mean_absolute_error(y_train, y_pred))
 fig, ax = plt.subplots()
 fig.set_size_inches(14, 8)
 
-# COLORS
-pred_train_color = "#B38E54"
-pred_test_color = "#E58475"
-pred_future_color = "#5EFCFF"
-true_train_color = "#FFC66B"
-true_test_color = "#FF6952"
-
-plt.bar(
+pred_train_bar = ax.bar(
     np.arange(len(y_train)) + bar_width - 0.5,
     y_pred,
     bar_width,
     label="Prediction (train)",
     #color=pred_train_color
 )
-plt.bar(
+true_train_bar = ax.bar(
     np.arange(len(y_train)) + bar_width * 2 - 0.5,
     y_train,
-    bar_width, 
+    bar_width,
     label="True (train)",
     #color=pred_test_color
 )
 
 y_pred = reg.predict(X_test)
 mae = mean_absolute_error(y_test, y_pred)
+print(mae)
+#exit()
+
+# Find the error for the next day.
+nde = abs((y_pred[0] - y_test[0]) / y_test[0]) * 100
 
 print(np.array(y_test).astype(int))
 print(y_pred.astype(int))
 
 maes = []
-error_files = os.listdir("errors")
+next_day_errs = []
+
+error_files = [f for f in os.listdir("errors") if f.endswith(".txt")]
+
 error_files.sort(key=lambda x: tuple([int(i) for i in x.strip(".tx").split("-")]))
 
 for f in error_files:
@@ -186,13 +190,28 @@ for f in error_files:
         break
 
     with open(os.path.join("errors", f)) as fh:
-        maes.append(float(fh.read().strip()))
+        err_values = fh.read().strip().split(",")
+        maes.append(float(err_values[0]))
+        next_day_errs.append(float(err_values[1]))
+
 maes.append(mae)
+next_day_errs.append(nde)
 
-plt.plot(np.arange(len(X_train) - len(maes), len(X_train)) + 0.5, maes, label="Mean Absolute Error", color="red")
-plt.text(len(X_train) - 0.5, mae + 5, s="%i" % mae, color="red")
+mae_plot = ax.plot(np.arange(len(X_train) - len(maes), len(X_train)) + 0.5, maes, label="Mean Absolute Error", color="red")
+ax.text(len(X_train) - 0.5, mae + 5, s="%i" % mae, color="red")
 
-plt.bar(
+ax_sec = ax.twinx()
+ax_sec.grid(False)
+
+percentage_off_plot = ax_sec.plot(
+    np.arange(len(X_train) - len(next_day_errs), len(X_train)) + 0.5,
+    next_day_errs,
+    label="Error for the next day",
+    color="blue"
+)
+ax_sec.text(len(X_train) - 0.5, nde - 5, s="%i%%" % nde, color="blue")
+
+pred_test_bar = ax.bar(
     np.arange(len(y_train), len(y_train) + n_test) + bar_width - 0.5,
     y_pred,
     bar_width,
@@ -202,7 +221,7 @@ plt.bar(
     #ecolor="red",
     #capsize=2
 )
-plt.bar(
+true_test_bar = ax.bar(
     np.arange(len(y_train), len(y_train) + n_test) + bar_width * 2 - 0.5,
     y_test,
     bar_width,
@@ -212,7 +231,7 @@ plt.bar(
 
 future_pred = reg.predict(X_new)
 
-plt.bar(
+incomplete_pred_bar = ax.bar(
     np.arange(n_test + len(y_train), len(y_train) + n_test + lookahead) + bar_width - 0.5,
     future_pred,
     bar_width,
@@ -222,7 +241,7 @@ plt.bar(
     capsize=2
 )
 
-plt.bar(
+incomplete_data_bar = ax.bar(
     np.arange(n_test + len(y_train), len(y_train) + n_test + lookahead) + bar_width * 2 - 0.5,
     y_incomplete,
     bar_width,
@@ -239,7 +258,7 @@ future_x = np.arange(n_test + len(y_train), len(y_train) + n_test + lookahead) +
 incomplete_x = np.arange(n_test + len(y_train), len(y_train) + n_test + lookahead) + bar_width * 2 - 0.5
 
 for i, pred in enumerate(future_pred):
-    plt.text(
+    ax.text(
         future_x[i] - 0.25, pred + 3 + mae, s="%i" % pred, color="#c94c1c"
     )
     # plt.arrow(
@@ -253,17 +272,32 @@ for i, pred in enumerate(future_pred):
     #     head_length=2,
     # )
 
+handles = [
+    pred_train_bar, true_train_bar, pred_test_bar, true_test_bar,
+    incomplete_pred_bar, incomplete_data_bar, mae_plot[0], percentage_off_plot[0],
+]
+
+labels = [
+    h.get_label() for h in handles
+]
+
+
 dates = [""] + dates
 dates[1] = "2020-3-28"
 print(dates)
-ax.set_xticklabels(dates)
+ax.set_xticklabels(dates, rotation=90)
 print(len(dates))
 print(len(X) + len(X_new))
 ax.xaxis.set_major_locator(MultipleLocator(1))
-plt.xticks(rotation=90)
-plt.legend()
-plt.xlim(-0.5, len(X) + len(X_new))
-plt.ylim(0, 200)
+
+ax.legend(handles, labels)
+ax.set_xlim(-0.5, len(X) + len(X_new))
+ax_sec.set_ylim(0, 100)
+ax.set_ylim(0, 200)
+
+ax.set_xlabel("Date")
+ax.set_ylabel("Number of deaths")
+ax_sec.set_ylabel("Percentage error")
 
 plt.suptitle("Predicting true COVID-19 deaths in the Netherlands", y=0.98, fontsize=18)
 plt.title("Using training data up to %s inclusively." % test_start_date, fontsize=12, y=1.01)
@@ -274,4 +308,4 @@ plt.subplots_adjust(top=0.9)
 plt.savefig("plots/%s.png" % test_start_date)
 
 with open("errors/%s.txt" % test_start_date, "w+") as f:
-    f.write("%s" % mae)
+    f.write("%.4f,%.4f" % (mae, nde))
