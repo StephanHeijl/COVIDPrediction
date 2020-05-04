@@ -127,8 +127,12 @@ print(n_test)
 
 test_start_date = dates[-(n_test + lookahead + 1)]
 
-X_train, y_train = X[:-n_test], y[:-n_test]
-X_test, y_test = X[-n_test:], y[-n_test:]
+if n_test > 0:
+    X_train, y_train = X[:-n_test], y[:-n_test]
+    X_test, y_test = X[-n_test:], y[-n_test:]
+else:
+    X_train, y_train = X, y
+    X_test, y_test = None, None
 
 # >>> Experiment with your own regressor here <<<
 reg = MLPRegressor((500, 500, 500), alpha=0.0001, max_iter=1000, solver="adam", random_state=12)
@@ -167,16 +171,16 @@ true_train_bar = ax.bar(
     #color=pred_test_color
 )
 
-y_pred = reg.predict(X_test)
-mae = mean_absolute_error(y_test, y_pred)
-print(mae)
-#exit()
+if X_test is not None:
+    y_pred = reg.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    print(mae)
 
-# Find the error for the next day.
-nde = abs((y_pred[0] - y_test[0]) / y_test[0]) * 100
+    # Find the error for the next day.
+    nde = abs((y_pred[0] - y_test[0]) / y_test[0]) * 100
 
-print(np.array(y_test).astype(int))
-print(y_pred.astype(int))
+    print(np.array(y_test).astype(int))
+    print(y_pred.astype(int))
 
 maes = []
 next_day_errs = []
@@ -194,8 +198,12 @@ for f in error_files:
         maes.append(float(err_values[0]))
         next_day_errs.append(float(err_values[1]))
 
-maes.append(mae)
-next_day_errs.append(nde)
+if X_test is not None:
+    maes.append(mae)
+    next_day_errs.append(nde)
+else:
+    mae = maes[-1]
+    nde = next_day_errs[-1]
 
 mae_plot = ax.plot(np.arange(len(X_train) - len(maes), len(X_train)) + 0.5, maes, label="Mean Absolute Error", color="red")
 ax.text(len(X_train) - 0.5, mae + 5, s="%i" % mae, color="red")
@@ -211,23 +219,24 @@ percentage_off_plot = ax_sec.plot(
 )
 ax_sec.text(len(X_train) - 0.5, nde - 5, s="%i%%" % nde, color="blue")
 
-pred_test_bar = ax.bar(
-    np.arange(len(y_train), len(y_train) + n_test) + bar_width - 0.5,
-    y_pred,
-    bar_width,
-    label="Prediction (test)",
-    #color=true_train_color,
-    #yerr=mae,
-    #ecolor="red",
-    #capsize=2
-)
-true_test_bar = ax.bar(
-    np.arange(len(y_train), len(y_train) + n_test) + bar_width * 2 - 0.5,
-    y_test,
-    bar_width,
-    label="True (test)",
-    #color=true_test_color
-)
+if X_test is not None:
+    pred_test_bar = ax.bar(
+        np.arange(len(y_train), len(y_train) + n_test) + bar_width - 0.5,
+        y_pred,
+        bar_width,
+        label="Prediction (test)",
+        #color=true_train_color,
+        #yerr=mae,
+        #ecolor="red",
+        #capsize=2
+    )
+    true_test_bar = ax.bar(
+        np.arange(len(y_train), len(y_train) + n_test) + bar_width * 2 - 0.5,
+        y_test,
+        bar_width,
+        label="True (test)",
+        #color=true_test_color
+    )
 
 future_pred = reg.predict(X_new)
 
@@ -272,10 +281,16 @@ for i, pred in enumerate(future_pred):
     #     head_length=2,
     # )
 
-handles = [
-    pred_train_bar, true_train_bar, pred_test_bar, true_test_bar,
-    incomplete_pred_bar, incomplete_data_bar, mae_plot[0], percentage_off_plot[0],
-]
+if X_test is not None:
+    handles = [
+        pred_train_bar, true_train_bar, pred_test_bar, true_test_bar,
+        incomplete_pred_bar, incomplete_data_bar, mae_plot[0], percentage_off_plot[0],
+    ]
+else:
+    handles = [
+        pred_train_bar, true_train_bar,
+        incomplete_pred_bar, incomplete_data_bar, mae_plot[0], percentage_off_plot[0],
+    ]
 
 labels = [
     h.get_label() for h in handles
@@ -307,5 +322,6 @@ plt.subplots_adjust(top=0.9)
 
 plt.savefig("plots/%s.png" % test_start_date)
 
-with open("errors/%s.txt" % test_start_date, "w+") as f:
-    f.write("%.4f,%.4f" % (mae, nde))
+if X_test is not None:
+    with open("errors/%s.txt" % test_start_date, "w+") as f:
+        f.write("%.4f,%.4f" % (mae, nde))

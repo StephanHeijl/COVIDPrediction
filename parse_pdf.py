@@ -5,6 +5,8 @@ import pandas
 deceased_dfs = []
 
 for pdf in sorted(os.listdir("pdfs")):
+    if not pdf.endswith(".pdf"):
+        continue
     pdf_path = os.path.join("pdfs", pdf)
     csv_fname = os.path.join("text", os.path.basename(pdf_path.rsplit(".", 1)[0]) + ".csv")
     if os.path.exists(csv_fname):

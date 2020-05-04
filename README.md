@@ -36,14 +36,20 @@ You can change the regression algorithm by looking for the line below:
 
 `# >>> Experiment with your own regressor here <<<`
 
-To create the animation above:
+To create the animation above
 ------------------------------
 You will need to create all the plots and include data from previous runs,
 so you need to run the plot process twice.
 
 ```
-seq 5 26 | xargs -i python3 true_death_rate.py {}
-seq 5 26 | xargs -i python3 true_death_rate.py {}
+seq 3 26 | xargs -i python3 true_death_rate.py {}
+seq 3 26 | xargs -i python3 true_death_rate.py {}
 convert -delay 50 -loop 0 `ls plots/*.png | sort -t'-' -k2 -k3 -n` animation.gif
 ```
 
+Notes on accuracy
+-----------------
+
+The current iteration has a mean absolute error of around 10, based on the last
+5 days where data is considered complete. Predictions may still be off though.
+As more data is fed to the model, more 
