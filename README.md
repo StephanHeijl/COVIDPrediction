@@ -45,6 +45,7 @@ so you need to run the plot process twice.
 seq 3 26 | xargs -i python3 true_death_rate.py {}
 seq 3 26 | xargs -i python3 true_death_rate.py {}
 convert -delay 50 -loop 0 `ls plots/*.png | sort -t'-' -k2 -k3 -n` animation.gif
+convert animation.gif \( +clone -set delay 500 \) +swap +delete  animation.gif
 ```
 
 Notes on accuracy
